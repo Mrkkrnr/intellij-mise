@@ -10,6 +10,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.Logger
 import com.intellij.openapi.diagnostic.debug
 import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.project.Project
 import com.intellij.platform.ide.progress.runWithModalProgressBlocking
 import com.intellij.util.application
 import java.util.function.Supplier
@@ -34,11 +35,23 @@ object MiseHelper {
                 else -> return emptyMap()
             }
 
+        return getMiseEnvVarsOrNotify(
+            project = project,
+            workingDirectory = workDir,
+            configEnvironment = configEnvironment,
+        )
+    }
+
+    fun getMiseEnvVarsOrNotify(
+        project: Project,
+        workingDirectory: String? = null,
+        configEnvironment: String? = null,
+    ): Map<String, String> {
         val result =
             if (application.isDispatchThread) {
                 logger.debug { "dispatch thread detected, loading env vars on current thread" }
                 runWithModalProgressBlocking(project, "Loading Mise Environment Variables") {
-                    MiseCommandLineHelper.getEnvVars(workDir, configEnvironment)
+                    MiseCommandLineHelper.getEnvVars(workingDirectory, configEnvironment)
                 }
             } else if (!application.isReadAccessAllowed) {
                 logger.debug { "no read lock detected, loading env vars on dispatch thread" }
@@ -46,13 +59,13 @@ object MiseHelper {
                 application.invokeAndWait {
                     logger.debug { "loading env vars on invokeAndWait" }
                     runWithModalProgressBlocking(project, "Loading Mise Environment Variables") {
-                        result = MiseCommandLineHelper.getEnvVars(workDir, configEnvironment)
+                        result = MiseCommandLineHelper.getEnvVars(workingDirectory, configEnvironment)
                     }
                 }
                 result ?: throw ProcessCanceledException()
             } else {
                 logger.debug { "unable to open the dialog. just load synchronously" }
-                MiseCommandLineHelper.getEnvVars(workDir, configEnvironment)
+                MiseCommandLineHelper.getEnvVars(workingDirectory, configEnvironment)
             }
 
         return result
